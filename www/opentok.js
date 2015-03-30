@@ -218,8 +218,8 @@ TBError = function(error) {
   return navigator.notification.alert(error);
 };
 
-TBSuccess = function() {
-  return console.log("success");
+TBSuccess = function(data) {
+  return console.log("success", data);
 };
 
 TBUpdateObjects = function() {

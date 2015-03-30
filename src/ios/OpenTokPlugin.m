@@ -86,6 +86,25 @@
     _publisher = [[OTPublisher alloc] initWithDelegate:self name:name];
     [_publisher setPublishAudio:bpubAudio];
     [_publisher setPublishVideo:bpubVideo];
+
+    UITapGestureRecognizer *singleTap = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleSingleTap)];
+    singleTap.numberOfTapsRequired = 1; 
+    [_publisher.view.videoView addGestureRecognizer:singleTap];
+
+    UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleDoubleTap)];
+    doubleTap.numberOfTapsRequired = 2; 
+    [_publisher.view.videoView addGestureRecognizer:doubleTap];
+
+    [singleTap requireGestureRecognizerToFail:doubleTap];
+
+    UIPanGestureRecognizer *panner = [[UIPanGestureRecognizer alloc]
+        initWithTarget:self action:@selector(handlePan:)];
+    [_publisher.view.videoView addGestureRecognizer:panner];
+
+    [_publisher.view.toolbarView setHidden:true];
+    _publisher.view.layer.cornerRadius = 5;
+    _publisher.view.layer.masksToBounds = YES;
+
     [self.webView.superview addSubview:_publisher.view];
     [_publisher.view setFrame:CGRectMake(left, top, width, height)];
     if (zIndex>0) {
@@ -94,12 +113,36 @@
     NSString* cameraPosition = [command.arguments objectAtIndex:8];
     if ([cameraPosition isEqualToString:@"back"]) {
         _publisher.cameraPosition = AVCaptureDevicePositionBack;
-    }
-    
+    }    
     // Return to Javascript
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
+
+
+- (void)handleSingleTap:(UITapGestureRecognizer *)recognizer {
+    
+}
+
+- (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer {
+    if (_publisher.cameraPosition === AVCaptureDevicePositionBack) {
+        [_publisher setCameraPosition:AVCaptureDevicePositionFront];
+    } else {
+        [_publisher setCameraPosition:AVCaptureDevicePositionBack];        
+    }    
+}
+
+- (void)handlePan:(UIPanGestureRecognizer *)panner {
+    UIView *draggedView = panner.view;
+    CGPoint offset = [panner translationInView:draggedView.superview];
+    CGPoint center = draggedView.center;
+    draggedView.center = CGPointMake(center.x + offset.x, center.y + offset.y);
+
+    // Reset translation to zero so on the next `panWasRecognized:` message, the
+    // translation will just be the additional movement of the touch since now.
+    [panner setTranslation:CGPointZero inView:draggedView.superview];
+}
+
 // Helper function to update Views
 - (void)updateView:(CDVInvokedUrlCommand*)command{
     NSString* callback = command.callbackId;
@@ -123,8 +166,16 @@
         streamInfo.view.frame = CGRectMake(left, top, width, height);
         streamInfo.view.layer.zPosition = zIndex;
     }
+
+    NSMutableDictionary* returnInfo = [NSMutableDictionary dictionaryWithCapacity:6];
+    [returnInfo setObject:sid forKey:@"sid"];
+    [returnInfo setObject:[NSNumber numberWithInt:top] forKey:@"top"];
+    [returnInfo setObject:[NSNumber numberWithInt:left] forKey:@"left"];
+    [returnInfo setObject:[NSNumber numberWithInt:width] forKey:@"width"];
+    [returnInfo setObject:[NSNumber numberWithInt:height] forKey:@"height"];
+    [returnInfo setObject:[NSNumber numberWithInt:zIndex] forKey:@"zIndex"];
     
-    CDVPluginResult* callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    CDVPluginResult* callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:returnInfo];
     [callbackResult setKeepCallbackAsBool:YES];
     //[self.commandDelegate sendPluginResult:callbackResult toSuccessCallbackString:command.callbackId];
     [self.commandDelegate sendPluginResult:callbackResult callbackId:command.callbackId];
