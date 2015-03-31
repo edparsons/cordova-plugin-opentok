@@ -9,9 +9,11 @@
     <license>Apache 2.0</license>
     <keywords>opentok,tokbox</keywords>
 
-    <platform name="android">
-      <asset src="www/opentok.js" target="opentok.js" />
+    <js-module src="www/opentok.js" name="opentok">
+      <clobbers target="com.tokbox.cordova.opentok" />
+    </js-module>
 
+    <platform name="android">
       <source-file src="src/android/com/tokbox/cordova/OpenTokAndroidPlugin.java"
         target-dir="src/com/tokbox/cordova/" />
 
@@ -42,7 +44,6 @@
     <!-- ios -->
     <platform name="ios">
       <hook type="before_plugin_install" src="scripts/downloadiOSSDK.js" />
-      <asset src="www/opentok.js" target="opentok.js" />
 
       <header-file src="src/ios/OpenTokPlugin.h" />
       <source-file src="src/ios/OpenTokPlugin.m" />
