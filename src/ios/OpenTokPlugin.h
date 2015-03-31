@@ -19,10 +19,14 @@
 
 // TB
 - (void)initPublisher:(CDVInvokedUrlCommand*)command;
--(void)initSession:(CDVInvokedUrlCommand*)command;
--(void)exceptionHandler:(CDVInvokedUrlCommand*)command;
+- (void)initSession:(CDVInvokedUrlCommand*)command;
+- (void)exceptionHandler:(CDVInvokedUrlCommand*)command;
 - (void)updateView:(CDVInvokedUrlCommand*)command;
 
+- (void)handleSingleTap:(UITapGestureRecognizer *)recognizer;
+- (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer;
+- (void)handlePan:(UIPanGestureRecognizer *)panner;
+ 
 // Publisher
 - (void)publishAudio:(CDVInvokedUrlCommand*)command;
 - (void)publishVideo:(CDVInvokedUrlCommand*)command;
