@@ -355,15 +355,10 @@ TBPublisher = (function() {
   };
 
   TBPublisher.prototype.removePublisherElement = function() {
-<<<<<<< HEAD
     while (this.pubElement.firstChild) {
         this.pubElement.removeChild(this.pubElement.firstChild);
     }
     return true;
-=======
-    this.pubElement.parentNode.removeChild(this.pubElement);
-    return this.pubElement = false;
->>>>>>> 2f9ec914e4b397d0365d74f4583d5a6f60c9a8c2
   };
 
   TBPublisher.prototype.destroy = function() {
@@ -589,7 +584,6 @@ TBSession = (function() {
     return subscriber;
   };
 
-<<<<<<< HEAD
   TBSession.prototype.unpublish = function(publisher) {
     var element;
     this.alreadyPublishing = false;
@@ -599,13 +593,6 @@ TBSession = (function() {
     } else if (publisher) {
       element = document.getElementById(publisher.domId);
     }
-=======
-  TBSession.prototype.unpublish = function() {
-    var element;
-    this.alreadyPublishing = false;
-    console.log("JS: Unpublish");
-    element = document.getElementById(this.publisher.domId);
->>>>>>> 2f9ec914e4b397d0365d74f4583d5a6f60c9a8c2
     if (element) {
       element.parentNode.removeChild(element);
       TBUpdateObjects();
