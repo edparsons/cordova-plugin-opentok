@@ -225,7 +225,7 @@ TBSuccess = function(data) {
 };
 
 TBUpdateObjects = function() {
-  var e, id, objects, position, ratios, streamId, _i, _len;
+  var e, id, objects, position, ratios, streamId, _i, _len, visible;
   console.log("JS: Objects being updated in TBUpdateObjects");
   objects = document.getElementsByClassName('OT_root');
   ratios = TBGetScreenRatios();
@@ -236,7 +236,8 @@ TBUpdateObjects = function() {
     console.log("JS sessionId: " + streamId);
     id = e.id;
     position = getPosition(id);
-    Cordova.exec(TBSuccess, TBError, OTPlugin, "updateView", [streamId, position.top, position.left, position.width, position.height, TBGetZIndex(e), ratios.widthRatio, ratios.heightRatio]);
+    visible = document.defaultView.getComputedStyle(e, null).getPropertyValue('display') === 'none' ? 0 : 1;
+    Cordova.exec(TBSuccess, TBError, OTPlugin, "updateView", [streamId, position.top, position.left, position.width, position.height, TBGetZIndex(e), visible]);
   }
 };
 
@@ -253,7 +254,6 @@ TBGetZIndex = function(ele) {
   var val;
   while ((ele != null)) {
     val = document.defaultView.getComputedStyle(ele, null).getPropertyValue('z-index');
-    console.log(val);
     if (parseInt(val)) {
       return val;
     }
@@ -593,10 +593,12 @@ TBSession = (function() {
     } else if (publisher) {
       element = document.getElementById(publisher.domId);
     }
+    /*
     if (element) {
       element.parentNode.removeChild(element);
       TBUpdateObjects();
     }
+    */
     return Cordova.exec(TBSuccess, TBError, OTPlugin, "unpublish", []);
   };
 
