@@ -16,6 +16,10 @@
     NSMutableDictionary *streamDictionary;
     NSMutableDictionary *callbackList;
     NSMutableDictionary *publisherPosition;
+    int spaceTop;
+    int spaceLeft;
+    int spaceWidth;
+    int spaceHeight;
 }
 
 @synthesize exceptionId;
@@ -25,6 +29,12 @@
 -(void) pluginInitialize{
     callbackList = [[NSMutableDictionary alloc] init];
     publisherPosition = [[NSMutableDictionary alloc] init];
+
+
+    spaceTop = 64;
+    spaceLeft = 0;
+    spaceWidth = 375;
+    spaceHeight = 525;
 }
 - (void)addEvent:(CDVInvokedUrlCommand*)command{
     NSString* event = [command.arguments objectAtIndex:0];
@@ -71,20 +81,16 @@
     NSString* name = [command.arguments objectAtIndex:0];
     int top = [[command.arguments objectAtIndex:1] intValue];
     int left = [[command.arguments objectAtIndex:2] intValue];
-    //int width = [[command.arguments objectAtIndex:3] intValue];
-    //int height = [[command.arguments objectAtIndex:4] intValue];
+    int width = [[command.arguments objectAtIndex:3] intValue];
+    int height = [[command.arguments objectAtIndex:4] intValue];
     int zIndex = [[command.arguments objectAtIndex:5] intValue];
-    
-    int width = 86;
-    int height = 86;
-    top = top + 86;
     
     [publisherPosition setObject:[NSNumber numberWithInt:left] forKey:@"left"];
     [publisherPosition setObject:[NSNumber numberWithInt:top] forKey:@"top"];
     [publisherPosition setObject:[NSNumber numberWithInt:width] forKey:@"width"];
     [publisherPosition setObject:[NSNumber numberWithInt:height] forKey:@"height"];
     [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
-
+    
     NSString* publishAudio = [command.arguments objectAtIndex:6];
     if ([publishAudio isEqualToString:@"false"]) {
         bpubAudio = NO;
@@ -98,6 +104,8 @@
     _publisher = [[OTPublisher alloc] initWithDelegate:self name:name];
     [_publisher setPublishAudio:bpubAudio];
     [_publisher setPublishVideo:bpubVideo];
+    
+    
     
     UITapGestureRecognizer *singleTap = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleSingleTap:)];
     singleTap.numberOfTapsRequired = 1;
@@ -113,12 +121,12 @@
                                       initWithTarget:self action:@selector(handlePan:)];
     [_publisher.view addGestureRecognizer:panner];
     
-    _publisher.view.layer.cornerRadius = 43;
+    _publisher.view.layer.cornerRadius = round(width / 2);
     _publisher.view.layer.masksToBounds = YES;
     
     [self.webView.superview addSubview:_publisher.view];
     [_publisher.view setFrame:CGRectMake(left, top, width, height)];
-    _publisher.view.layer.zPosition = 2;
+    _publisher.view.layer.zPosition = zIndex;
     
     NSString* cameraPosition = [command.arguments objectAtIndex:8];
     if ([cameraPosition isEqualToString:@"back"]) {
@@ -137,6 +145,21 @@
     [pluginResult setKeepCallbackAsBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
+
+// Called by TB.setViewSpace()
+- (void)setViewSpace:(CDVInvokedUrlCommand*)command {
+    NSLog(@"iOS setting view space");
+
+    // Get Parameters
+    spaceTop = [[command.arguments objectAtIndex:0] intValue];
+    spaceLeft = [[command.arguments objectAtIndex:1] intValue];
+    spaceWidth = [[command.arguments objectAtIndex:2] intValue];
+    spaceHeight = [[command.arguments objectAtIndex:3] intValue];
+    
+    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
 // Helper function to update Views
 - (void)updateView:(CDVInvokedUrlCommand*)command{
     NSString* sid = [command.arguments objectAtIndex:0];
@@ -145,35 +168,53 @@
     int width = [[command.arguments objectAtIndex:3] intValue];
     int height = [[command.arguments objectAtIndex:4] intValue];
     int zIndex = [[command.arguments objectAtIndex:5] intValue];
+    int visible = [[command.arguments objectAtIndex:6] intValue];
 
+    
     if ([sid isEqualToString:@"TBPublisher"]) {
         NSLog(@"The Width is: %d", width);
-        if (width == 86) {
-            top = [[publisherPosition objectForKey:@"top"] intValue];
-            left = [[publisherPosition objectForKey:@"left"] intValue];
-            width = [[publisherPosition objectForKey:@"width"] intValue];
-            height = [[publisherPosition objectForKey:@"height"] intValue];
-            [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
-            
-            _publisher.view.layer.cornerRadius = 43;
-            
-            [_publisher.view  setUserInteractionEnabled:YES];
+        if (visible) {
+            _publisher.view.alpha = 1;
+            if (width < 100) {
+                if (width == 0) {
+                    top = [[publisherPosition objectForKey:@"top"] intValue];
+                    left = [[publisherPosition objectForKey:@"left"] intValue];
+                    width = [[publisherPosition objectForKey:@"width"] intValue];
+                    height = [[publisherPosition objectForKey:@"height"] intValue];
+                    [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
+                }
+                
+                _publisher.view.layer.cornerRadius = round(width / 2);
+                
+                [_publisher.view  setUserInteractionEnabled:YES];
+            }
+            _publisher.view.frame = CGRectMake(left, top, width, height);
+            _publisher.view.layer.zPosition = zIndex;
+        } else {
+            _publisher.view.alpha = 0;
         }
-        _publisher.view.frame = CGRectMake(left, top, width, height);
-        _publisher.view.layer.zPosition = 2;
     }
     
     // Pulls the subscriber object from dictionary to prepare it for update
     OTSubscriber* streamInfo = [subscriberDictionary objectForKey:sid];
     
     if (streamInfo) {
-        // Reposition the video feeds!
         streamInfo.view.frame = CGRectMake(left, top, width, height);
-        streamInfo.view.layer.zPosition = 2;
-        if (width == 86) {
-            streamInfo.view.layer.cornerRadius = 43;
+        if (visible) {
+            // Reposition the video feeds!
+            [UIView animateWithDuration:0.5
+                             animations:^{                                             _publisher.view.alpha = 1;
+                             }];
+            if (width == 86) {
+                streamInfo.view.layer.cornerRadius = round(width / 2);
+            } else {
+                streamInfo.view.layer.cornerRadius = 0;
+            }
+            streamInfo.view.layer.zPosition = zIndex;
         } else {
-            streamInfo.view.layer.cornerRadius = 0;
+            [UIView animateWithDuration:0.5
+                             animations:^{                                             _publisher.view.alpha = 0;
+                             }];
         }
     }
     
@@ -192,12 +233,10 @@
         int height = [[publisherPosition objectForKey:@"height"] intValue];
         [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
         
-        _publisher.view.layer.cornerRadius = 43;
+        _publisher.view.layer.cornerRadius = round(width / 2);
         
         frame = CGRectMake(left, top, width, height);
 
-        _publisher.view.layer.zPosition = 6;
-        
         //[_publisher.view  setUserInteractionEnabled:YES];
     } else {
         [publisherPosition setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.x] forKey:@"left"];
@@ -207,8 +246,6 @@
         [publisherPosition setObject:[NSNumber numberWithInt:1] forKey:@"expanded"];
         
         _publisher.view.layer.cornerRadius = 0;
-
-        _publisher.view.layer.zPosition = 2;
 
         frame = CGRectMake(0, 64, [[UIScreen mainScreen] bounds].size.width, ([[UIScreen mainScreen] bounds].size.height) - 108);
         
@@ -243,19 +280,22 @@
         CGPoint center = draggedView.center;
         int left = center.x + offset.x;
         int top = center.y + offset.y;
-        if (left < 43) {
-            left = 43;
-        }
-        if (top < 43 + 64) {
-            top = 43 + 64;
-        }
-        if (left > ([[UIScreen mainScreen] bounds].size.width - 43)) {
-            left = ([[UIScreen mainScreen] bounds].size.width - 43);
-        }
-        if (top > ([[UIScreen mainScreen] bounds].size.height - 43 - 44)) {
-            top = ([[UIScreen mainScreen] bounds].size.height - 43 - 44);
-        }
         
+        int width = _publisher.view.frame.size.width / 2;
+        int height = _publisher.view.frame.size.height / 2;
+        
+        if (left < width + spaceLeft) {
+            left = width + spaceLeft;
+        }
+        if (top < width + spaceTop) {
+            top = width + spaceTop;
+        }
+        if (left > (spaceLeft + spaceWidth - height)) {
+            left = (spaceLeft + spaceWidth - height);
+        }
+        if (top > (spaceTop + spaceHeight - height)) {
+            top = (spaceTop + spaceHeight - height);
+        }
         
         draggedView.center = CGPointMake(left, top);
         
@@ -303,15 +343,14 @@
     }
     [_publisher setPublishVideo:pubVideo];
 }
-- (void)setCameraPosition:(CDVInvokedUrlCommand*)command{
-    NSString* publishCameraPosition = [command.arguments objectAtIndex:0];
-    NSLog(@"iOS Altering Video camera position, %@", publishCameraPosition);
-    
-    if ([publishCameraPosition isEqualToString:@"back"]) {
-        [_publisher setCameraPosition:AVCaptureDevicePositionBack];
-    } else if ([publishCameraPosition isEqualToString:@"front"]) {
-        [_publisher setCameraPosition:AVCaptureDevicePositionFront];
+- (void)visible:(CDVInvokedUrlCommand*)command{
+    NSString* visibleString = [command.arguments objectAtIndex:0];
+    NSLog(@"iOS Altering Video visiblility, %@", visibleString);
+    BOOL visible = YES;
+    if ([visibleString isEqualToString:@"false"]) {
+        visible = NO;
     }
+    [_publisher.view setHidden:!visible];
 }
 - (void)destroyPublisher:(CDVInvokedUrlCommand *)command{
     NSLog(@"iOS Destroying Publisher");
@@ -370,7 +409,7 @@
     int left = [[command.arguments objectAtIndex:2] intValue];
     //int width = [[command.arguments objectAtIndex:3] intValue];
     //int height = [[command.arguments objectAtIndex:4] intValue];
-    int zIndex = [[command.arguments objectAtIndex:5] intValue];
+    //int zIndex = [[command.arguments objectAtIndex:5] intValue];
 
     int width = 86;
     int height = 86;
@@ -389,14 +428,14 @@
     [subscriberDictionary setObject:sub forKey:myStream.streamId];
     
     [sub.view setFrame:CGRectMake(left, top, width, height)];
-
-    sub.view.layer.zPosition = 2;
     
     [self.webView.superview addSubview:sub.view];
-    
-    sub.view.layer.cornerRadius = 43;
+
+    sub.view.layer.zPosition = 3;
+    sub.view.layer.cornerRadius = round(width / 2);
     sub.view.layer.masksToBounds = YES;
     
+
     // Return to JS event handler
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -576,6 +615,10 @@
     [self triggerStreamCreated: stream withEventType: @"publisherEvents"];
 }
 - (void)publisher:(OTPublisherKit*)publisher streamDestroyed:(OTStream *)stream{
+    if (_publisher) {
+        [_publisher.view removeFromSuperview];
+    }
+    
     [self triggerStreamDestroyed: stream withEventType: @"publisherEvents"];
 }
 - (void)publisher:(OTPublisher*)publisher didFailWithError:(NSError*) error {
@@ -592,7 +635,7 @@
 #pragma mark Helper Methods
 - (void)triggerStreamCreated: (OTStream*) stream withEventType: (NSString*) eventType{
     NSMutableDictionary* data = [[NSMutableDictionary alloc] init];
-    NSMutableDictionary* streamData = [self createDataFromStream: stream];
+    NSMutableDictionary* streamData = [self createDataFromStream: stream withConnectionId:YES];
     [data setObject: streamData forKey: @"stream"];
     [self triggerJSEvent: eventType withType: @"streamCreated" withData: data];
 }
@@ -600,7 +643,7 @@
     [streamDictionary removeObjectForKey: stream.streamId];
     
     NSMutableDictionary* data = [[NSMutableDictionary alloc] init];
-    NSMutableDictionary* streamData = [self createDataFromStream: stream];
+    NSMutableDictionary* streamData = [self createDataFromStream: stream withConnectionId:NO];
     [data setObject: streamData forKey: @"stream"];
     [self triggerJSEvent: eventType withType: @"streamDestroyed" withData: data];
 }
@@ -614,9 +657,11 @@
     }
     return connectionData;
 }
-- (NSMutableDictionary*)createDataFromStream:(OTStream*)stream{
+- (NSMutableDictionary*)createDataFromStream:(OTStream*)stream withConnectionId:(BOOL)toggle{
     NSMutableDictionary* streamData = [[NSMutableDictionary alloc] init];
-    [streamData setObject: stream.connection.connectionId forKey: @"connectionId" ];
+    if (toggle && [stream.connection isKindOfClass:[OTConnection class]]) {
+        [streamData setObject: stream.connection.connectionId forKey: @"connectionId" ];
+    }
     [streamData setObject: [NSString stringWithFormat:@"%.0f", [stream.creationTime timeIntervalSince1970]] forKey: @"creationTime" ];
     [streamData setObject: [NSNumber numberWithInt:-999] forKey: @"fps" ];
     [streamData setObject: [NSNumber numberWithBool: stream.hasAudio] forKey: @"hasAudio" ];

@@ -19,20 +19,21 @@
 
 // TB
 - (void)initPublisher:(CDVInvokedUrlCommand*)command;
-
--(void)initSession:(CDVInvokedUrlCommand*)command;
--(void)exceptionHandler:(CDVInvokedUrlCommand*)command;
+- (void)initSession:(CDVInvokedUrlCommand*)command;
+- (void)exceptionHandler:(CDVInvokedUrlCommand*)command;
 - (void)updateView:(CDVInvokedUrlCommand*)command;
+- (void)setViewSpace:(CDVInvokedUrlCommand*)command;
 
 // Publisher
 - (void)publishAudio:(CDVInvokedUrlCommand*)command;
 - (void)publishVideo:(CDVInvokedUrlCommand*)command;
+- (void)visible:(CDVInvokedUrlCommand*)command;
 - (void)setCameraPosition:(CDVInvokedUrlCommand*)command;
 - (void)destroyPublisher:(CDVInvokedUrlCommand*)command;
 
 // Session
--(void)connect:(CDVInvokedUrlCommand*)command;
--(void)disconnect:(CDVInvokedUrlCommand*)command;
+- (void)connect:(CDVInvokedUrlCommand*)command;
+- (void)disconnect:(CDVInvokedUrlCommand*)command;
 - (void)publish:(CDVInvokedUrlCommand*)command;
 - (void)unpublish:(CDVInvokedUrlCommand*)command;
 - (void)subscribe:(CDVInvokedUrlCommand*)command;

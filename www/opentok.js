@@ -11,6 +11,9 @@ window.OT = {
     }
     return new TBSession(apiKey, sessionId);
   },
+  setViewSpace: function(top, left, width, height) {
+    Cordova.exec(TBSuccess, TBError, OTPlugin, "setViewSpace", [top, left, width, height]);
+  },
   log: function(message) {
     return pdebug("TB LOG", message);
   },
