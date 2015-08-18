@@ -188,7 +188,19 @@
                 
                 [_publisher.view  setUserInteractionEnabled:YES];
             }
+
             _publisher.view.frame = CGRectMake(left, top, width, height);
+            /*
+            [UIView animateWithDuration:0.5 animations:^{
+                _publisher.view.frame = CGRectMake(_publisher.view.frame.origin.x, _publisher.view.frame.origin.y, 0,0);
+                } completion:^(BOOL finished){
+                    _publisher.view.frame = CGRectMake(left, top, 0,0);
+                    [UIView animateWithDuration:0.5 animations:^{
+                        _publisher.view.frame = CGRectMake(left, top, width, height);
+                    }];
+                }
+            ];
+            */
             _publisher.view.layer.zPosition = zIndex;
         } else {
             _publisher.view.alpha = 0;
@@ -247,7 +259,7 @@
         
         _publisher.view.layer.cornerRadius = 0;
 
-        frame = CGRectMake(0, 64, [[UIScreen mainScreen] bounds].size.width, ([[UIScreen mainScreen] bounds].size.height) - 108);
+        frame = CGRectMake(spaceLeft, spaceTop, spaceWidth, spaceHeight);
         
         //[_publisher.view  setUserInteractionEnabled:NO];
     }

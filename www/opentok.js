@@ -612,11 +612,13 @@ TBSession = (function() {
     element = document.getElementById("TBStreamConnection" + elementId);
     console.log("JS: Unsubscribing");
     element = streamElements[elementId];
+    /*
     if (element) {
       element.parentNode.removeChild(element);
       delete streamElements[elementId];
       TBUpdateObjects();
     }
+    */
     return Cordova.exec(TBSuccess, TBError, OTPlugin, "unsubscribe", [subscriber.streamId]);
   };
 
@@ -702,7 +704,13 @@ TBSession = (function() {
       reason: event.reason
     });
     this.trigger("sessionDisconnected", sessionDisconnectedEvent);
-    this.cleanUpDom();
+    //this.cleanUpDom();
+    var objects = document.getElementsByClassName('OT_root');
+    for (var i = objects.length - 1; i >= 0; i--) {
+      while (objects[i].firstChild) {
+        objects[i].removeChild(objects[i].firstChild);
+      }
+    }
     return this;
   };
 
