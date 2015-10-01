@@ -101,12 +101,18 @@
     }
     
     // Publish and set View
-    _publisher = [[OTPublisher alloc] initWithDelegate:self name:name];
+    if( ! _publisher ){
+        _publisher = [[OTPublisher alloc] initWithDelegate:self name:name];
+    }
     [_publisher setPublishAudio:bpubAudio];
     [_publisher setPublishVideo:bpubVideo];
     
-    
-    
+    if (width < 80) {
+        _publisher.view.userInteractionEnabled = NO;
+    } else {
+        _publisher.view.userInteractionEnabled = YES;
+    }
+        
     UITapGestureRecognizer *singleTap = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleSingleTap:)];
     singleTap.numberOfTapsRequired = 1;
     [_publisher.view addGestureRecognizer:singleTap];
@@ -134,10 +140,6 @@
     }
 
     NSMutableDictionary* payload = [[NSMutableDictionary alloc] init];
-    [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.x] forKey:@"left"];
-    [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.y] forKey:@"top"];
-    [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.width] forKey:@"width"];
-    [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.height] forKey:@"height"];
     
     // Return to Javascript
     [callbackList setObject:command.callbackId forKey:@"publishViewChangeCallbackId"];
@@ -187,6 +189,11 @@
                 _publisher.view.layer.cornerRadius = round(width / 2);
                 
                 [_publisher.view  setUserInteractionEnabled:YES];
+            }
+            if (width < 80) {
+                _publisher.view.userInteractionEnabled = NO;
+            } else {
+                _publisher.view.userInteractionEnabled = YES;
             }
 
             _publisher.view.frame = CGRectMake(left, top, width, height);

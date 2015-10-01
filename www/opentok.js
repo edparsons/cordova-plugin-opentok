@@ -738,7 +738,10 @@ TBSession = (function() {
     if (stream) {
       element = streamElements[stream.streamId];
       if (element) {
-        element.parentNode.removeChild(element);
+        //element.parentNode.removeChild(element);
+        while (element.firstChild) {
+          element.removeChild(element.firstChild);
+        }
         delete streamElements[stream.streamId];
         TBUpdateObjects();
       }
