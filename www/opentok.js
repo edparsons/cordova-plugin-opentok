@@ -6,13 +6,16 @@ window.OT = {
     return new TBPublisher(one, two, three, callback);
   },
   initSession: function(apiKey, sessionId) {
-    if (sessionId == null) {
+    if (sessionId === null) {
       this.showError("OT.initSession takes 2 parameters, your API Key and Session ID");
     }
     return new TBSession(apiKey, sessionId);
   },
   setViewSpace: function(top, left, width, height) {
     Cordova.exec(TBSuccess, TBError, OTPlugin, "setViewSpace", [top, left, width, height]);
+  },
+  setInteractivity: function(bool) {
+    Cordova.exec(TBSuccess, TBError, OTPlugin, "setInteractivity", [bool]);
   },
   log: function(message) {
     return pdebug("TB LOG", message);
@@ -22,6 +25,9 @@ window.OT = {
     if (event === "exception") {
       console.log("JS: TB Exception Handler added");
       return Cordova.exec(handler, TBError, OTPlugin, "exceptionHandler", []);
+    } else {
+      console.log("JS: TB Custom Handler added");
+      return Cordova.exec(handler, TBSuccess, OTPlugin, "addEvent", [event]);
     }
   },
   setLogLevel: function(a) {
@@ -172,13 +178,20 @@ getPosition = function(divName) {
     return {};
   }
   computedStyle = window.getComputedStyle ? getComputedStyle(pubDiv, null) : {};
-  width = pubDiv.offsetWidth;
-  height = pubDiv.offsetHeight;
-  curtop = pubDiv.offsetTop;
-  curleft = pubDiv.offsetLeft;
-  while ((pubDiv = pubDiv.offsetParent)) {
-    curleft += pubDiv.offsetLeft;
-    curtop += pubDiv.offsetTop;
+  if (pubDiv.style.top && pubDiv.style.top && pubDiv.style.top && pubDiv.style.top) {
+    width = parseInt(pubDiv.style.width);
+    height = parseInt(pubDiv.style.height);
+    curtop = parseInt(pubDiv.style.top);
+    curleft = parseInt(pubDiv.style.left);
+  } else {
+    width = pubDiv.offsetWidth;
+    height = pubDiv.offsetHeight;
+    curtop = pubDiv.offsetTop;
+    curleft = pubDiv.offsetLeft;
+    while ((pubDiv = pubDiv.offsetParent)) {
+      curleft += pubDiv.offsetLeft;
+      curtop += pubDiv.offsetTop;
+    }
   }
   marginTop = parseInt(computedStyle.marginTop) || 0;
   marginBottom = parseInt(computedStyle.marginBottom) || 0;
@@ -290,7 +303,6 @@ TBPublisher = (function() {
     this.sanitizeInputs(one, two, three);
     pdebug("creating publisher", {});
     position = getPosition(this.domId);
-    name = "";
     publishAudio = "true";
     publishVideo = "true";
     cameraName = "front";
@@ -317,6 +329,7 @@ TBPublisher = (function() {
       width: width,
       height: height
     });
+    name = this.pubElement.getAttribute("data-cam-name")? this.pubElement.getAttribute("data-cam-name") : "";
     position = getPosition(this.domId);
     TBUpdateObjects();
     OT.getHelper().eventing(this);
@@ -887,8 +900,9 @@ TBSubscriber = (function() {
     });
     position = getPosition(obj.id);
     ratios = TBGetScreenRatios();
-    pdebug("final subscriber position", position);
-    Cordova.exec(TBSuccess, TBError, OTPlugin, "subscribe", [stream.streamId, position.top, position.left, width, height, zIndex, subscribeToAudio, subscribeToVideo, ratios.widthRatio, ratios.heightRatio]);
+    visible = document.defaultView.getComputedStyle(element, null).getPropertyValue('display') === 'none' ? 0 : 1;
+    pdebug("final subscriber position", position, element, visible);
+    Cordova.exec(TBSuccess, TBError, OTPlugin, "subscribe", [stream.streamId, position.top, position.left, width, height, zIndex, subscribeToAudio, subscribeToVideo, ratios.widthRatio, ratios.heightRatio, visible]);
   }
 
   TBSubscriber.prototype.removeEventListener = function(event, listener) {

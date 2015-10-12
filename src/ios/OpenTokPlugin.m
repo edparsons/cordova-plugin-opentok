@@ -11,15 +11,24 @@
     OTSession* _session;
     OTPublisher* _publisher;
     OTSubscriber* _subscriber;
+    UIView* publisherOverlayButtonLeft;
+    UIView* publisherOverlayButtonRight;
     NSMutableDictionary *subscriberDictionary;
     NSMutableDictionary *connectionDictionary;
     NSMutableDictionary *streamDictionary;
     NSMutableDictionary *callbackList;
     NSMutableDictionary *publisherPosition;
+    CADisplayLink* displayLink;
     int spaceTop;
     int spaceLeft;
     int spaceWidth;
     int spaceHeight;
+    int offsetTop;
+    int offsetLeft;
+    bool isFullscreen;
+    CGRect animateToFrame;
+    CGRect animateFromFrame;
+    double animateTimeout;
 }
 
 @synthesize exceptionId;
@@ -35,12 +44,48 @@
     spaceLeft = 0;
     spaceWidth = 375;
     spaceHeight = 525;
+    offsetTop = 0;
+    offsetLeft = 0;
+    isFullscreen = false;
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(handleSpeedsharePan:)
+        name:@"SpeedshareVideoPIPPan"
+        object:nil];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(handleSpeedshareExit:)
+        name:@"SpeedshareVideoPIPExit"
+        object:nil];
+
 }
+
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)addEvent:(CDVInvokedUrlCommand*)command{
     NSString* event = [command.arguments objectAtIndex:0];
     [callbackList setObject:command.callbackId forKey: event];
 }
 
+- (void)handleSpeedsharePan:(NSNotification *) notification {
+    NSDictionary *dict = [notification userInfo];
+    offsetTop = [[dict objectForKey:@"y"] intValue];
+    offsetLeft = [[dict objectForKey:@"x"] intValue];
+    for (NSString* key in subscriberDictionary) {
+        OTSubscriber* stream = [subscriberDictionary objectForKey:key];
+        stream.view.center = CGPointMake(offsetLeft, offsetTop);
+    }
+}
+
+- (void)handleSpeedshareExit:(NSNotification *) notification {
+    for (NSString* key in subscriberDictionary) {
+        //OTSubscriber* stream = [subscriberDictionary objectForKey:key];
+        //stream.view.center = CGPointMake(0, 0);
+    }
+}
 
 #pragma mark -
 #pragma mark Cordova JS - iOS bindings
@@ -127,12 +172,38 @@
                                       initWithTarget:self action:@selector(handlePan:)];
     [_publisher.view addGestureRecognizer:panner];
     
-    _publisher.view.layer.cornerRadius = round(width / 2);
-    _publisher.view.layer.masksToBounds = YES;
-    
+    //_publisher.view.layer.needsDisplayOnBoundsChange = YES;
+    //_publisher.view.contentMode = UIViewContentModeRedraw;
+
     [self.webView.superview addSubview:_publisher.view];
     [_publisher.view setFrame:CGRectMake(left, top, width, height)];
-    _publisher.view.layer.zPosition = zIndex;
+    //_publisher.view.layer.zPosition = zIndex;
+    _publisher.view.layer.zPosition = 3;
+    _publisher.view.layer.cornerRadius = round(width / 2);
+    _publisher.view.clipsToBounds = YES;
+    
+    if( !publisherOverlayButtonLeft ){
+        publisherOverlayButtonLeft = [[UIView alloc] init];
+    }
+    [self.webView.superview addSubview:publisherOverlayButtonLeft];
+    [publisherOverlayButtonLeft setFrame:CGRectMake(0, spaceTop + spaceHeight - 40, 40, 40)];
+    [publisherOverlayButtonLeft setBackgroundColor:[UIColor clearColor]];
+
+    if( !publisherOverlayButtonRight ) {
+        publisherOverlayButtonRight = [[UIView alloc] init];
+    }
+    [self.webView.superview addSubview:publisherOverlayButtonRight];
+    [publisherOverlayButtonRight setFrame:CGRectMake(spaceLeft + spaceWidth - 40, spaceTop + spaceHeight - 40, 40, 40)];
+    [publisherOverlayButtonRight setBackgroundColor:[UIColor clearColor]];
+    
+    UITapGestureRecognizer *singleTapButton = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleSingleTapOverlay:)];
+    singleTapButton.numberOfTapsRequired = 1;
+    [publisherOverlayButtonLeft addGestureRecognizer:singleTapButton];
+
+    singleTapButton = [[UITapGestureRecognizer alloc] initWithTarget: self action:@selector(handleSingleTapOverlay:)];
+    singleTapButton.numberOfTapsRequired = 1;
+    [publisherOverlayButtonRight addGestureRecognizer:singleTapButton];
+
     
     NSString* cameraPosition = [command.arguments objectAtIndex:8];
     if ([cameraPosition isEqualToString:@"back"]) {
@@ -157,7 +228,9 @@
     spaceLeft = [[command.arguments objectAtIndex:1] intValue];
     spaceWidth = [[command.arguments objectAtIndex:2] intValue];
     spaceHeight = [[command.arguments objectAtIndex:3] intValue];
-    
+    [publisherOverlayButtonLeft setFrame:CGRectMake(0, spaceTop + spaceHeight - 40, 40, 40)];
+    [publisherOverlayButtonRight setFrame:CGRectMake(spaceLeft + spaceWidth - 40, spaceTop + spaceHeight - 40, 40, 40)];
+        
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
@@ -173,68 +246,36 @@
     int visible = [[command.arguments objectAtIndex:6] intValue];
 
     
-    if ([sid isEqualToString:@"TBPublisher"]) {
+    if ([sid isEqualToString:@"TBPublisher"] && ![_publisher isEqual:nil]) {
         NSLog(@"The Width is: %d", width);
-        if (visible) {
-            _publisher.view.alpha = 1;
-            if (width < 100) {
-                if (width == 0) {
-                    top = [[publisherPosition objectForKey:@"top"] intValue];
-                    left = [[publisherPosition objectForKey:@"left"] intValue];
-                    width = [[publisherPosition objectForKey:@"width"] intValue];
-                    height = [[publisherPosition objectForKey:@"height"] intValue];
-                    [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
-                }
-                
-                _publisher.view.layer.cornerRadius = round(width / 2);
-                
-                [_publisher.view  setUserInteractionEnabled:YES];
-            }
-            if (width < 80) {
-                _publisher.view.userInteractionEnabled = NO;
-            } else {
-                _publisher.view.userInteractionEnabled = YES;
-            }
-
-            _publisher.view.frame = CGRectMake(left, top, width, height);
-            /*
-            [UIView animateWithDuration:0.5 animations:^{
-                _publisher.view.frame = CGRectMake(_publisher.view.frame.origin.x, _publisher.view.frame.origin.y, 0,0);
-                } completion:^(BOOL finished){
-                    _publisher.view.frame = CGRectMake(left, top, 0,0);
-                    [UIView animateWithDuration:0.5 animations:^{
-                        _publisher.view.frame = CGRectMake(left, top, width, height);
-                    }];
-                }
-            ];
-            */
-            _publisher.view.layer.zPosition = zIndex;
-        } else {
-            _publisher.view.alpha = 0;
+        if (width < _publisher.view.frame.size.width) {
+            _publisher.view.layer.cornerRadius = round(width / 2);
         }
+        [UIView animateWithDuration:0.5
+             animations:^{
+                _publisher.view.frame = CGRectMake(left, top, width, height);
+                _publisher.view.alpha = visible;
+             }
+             completion:^(BOOL finished) {
+                _publisher.view.layer.cornerRadius = round(width / 2);
+            }];
+
+
+        if (width < 80) {
+            _publisher.view.layer.zPosition = 9;
+            _publisher.view.userInteractionEnabled = NO;
+        } else {
+            _publisher.view.layer.zPosition = 3;
+            _publisher.view.userInteractionEnabled = YES;
+        }
+        //_publisher.view.layer.zPosition = zIndex;
     }
     
     // Pulls the subscriber object from dictionary to prepare it for update
     OTSubscriber* streamInfo = [subscriberDictionary objectForKey:sid];
     
     if (streamInfo) {
-        streamInfo.view.frame = CGRectMake(left, top, width, height);
-        if (visible) {
-            // Reposition the video feeds!
-            [UIView animateWithDuration:0.5
-                             animations:^{                                             _publisher.view.alpha = 1;
-                             }];
-            if (width == 86) {
-                streamInfo.view.layer.cornerRadius = round(width / 2);
-            } else {
-                streamInfo.view.layer.cornerRadius = 0;
-            }
-            streamInfo.view.layer.zPosition = zIndex;
-        } else {
-            [UIView animateWithDuration:0.5
-                             animations:^{                                             _publisher.view.alpha = 0;
-                             }];
-        }
+        [self updateView:streamInfo.view WithTop:top Left:left Width:width Height:height Visible:visible Z:zIndex];
     }
     
     CDVPluginResult* callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -243,20 +284,77 @@
     [self.commandDelegate sendPluginResult:callbackResult callbackId:command.callbackId];
 }
 
+-(void) updateView:(UIView*)view WithTop:(int)top Left:(int)left Width:(int)width Height:(int)height Visible:(BOOL)visible Z:(int)z {
+    if (visible) {
+        //view.layer.zPosition = z;
+        // Reposition the video feeds!
+        if (width < 200) {
+            view.layer.cornerRadius = round(width / 2);
+        }
+        [UIView animateWithDuration:0.5
+                         animations:^{
+                            view.alpha = 1;
+                            view.frame = CGRectMake(left, top, width, height);
+
+                         }
+                         completion:^(BOOL finished){
+                            if (width >= 200) {
+                                view.layer.cornerRadius = 0;
+                            }
+                         }];
+
+    } else {
+        [UIView animateWithDuration:0.5
+                         animations:^{
+                            view.alpha = 0;
+                         }];
+    }
+}
+
+- (float)calcStepTo:(int)to from:(int)from step:(double)step total:(double)total {
+    return from + ((to - from) / total * step);
+}
+
+- (void)runZoomAnimate:(CADisplayLink *)dLink
+ {
+    if (animateTimeout == 0) {
+        animateTimeout = [displayLink timestamp];
+    }
+    double currentTime = [displayLink timestamp];
+    double renderTime = currentTime - animateTimeout;
+    NSLog(@"%f %f",renderTime, currentTime);
+    double total = 0.4;
+    float top = [self calcStepTo:animateToFrame.origin.y from:animateFromFrame.origin.y step:renderTime total:total];
+    float left = [self calcStepTo:animateToFrame.origin.x from:animateFromFrame.origin.x step:renderTime total:total];
+    float width = [self calcStepTo:animateToFrame.size.width from:animateFromFrame.size.width step:renderTime total:total];
+    float height = [self calcStepTo:animateToFrame.size.height from:animateFromFrame.size.height step:renderTime total:total];
+    CGRect frame = CGRectMake(left, top, width, height);
+    _publisher.view.frame = frame;
+    _publisher.view.layer.cornerRadius = round(width / 2);
+    if (renderTime > total) {
+        _publisher.view.frame = animateToFrame;
+        _publisher.view.layer.cornerRadius = round(animateToFrame.size.width / 2);
+        [displayLink invalidate];
+        displayLink = nil;
+    }
+}
+
 - (void)handleSingleTap:(UITapGestureRecognizer *)recognizer {
-    CGRect frame;
     if ([[publisherPosition objectForKey:@"expanded"] intValue] == 1) {
         int top = [[publisherPosition objectForKey:@"top"] intValue];
         int left = [[publisherPosition objectForKey:@"left"] intValue];
         int width = [[publisherPosition objectForKey:@"width"] intValue];
         int height = [[publisherPosition objectForKey:@"height"] intValue];
         [publisherPosition setObject:[NSNumber numberWithInt:0] forKey:@"expanded"];
-        
-        _publisher.view.layer.cornerRadius = round(width / 2);
-        
-        frame = CGRectMake(left, top, width, height);
 
-        //[_publisher.view  setUserInteractionEnabled:YES];
+
+        displayLink = [CADisplayLink displayLinkWithTarget:self
+                                                   selector:@selector(runZoomAnimate:)];
+        animateFromFrame = _publisher.view.frame;
+        animateToFrame = CGRectMake(left, top, width, height);
+        animateTimeout = 0;
+        [displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+                           forMode:NSDefaultRunLoopMode];
     } else {
         [publisherPosition setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.x] forKey:@"left"];
         [publisherPosition setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.y] forKey:@"top"];
@@ -264,24 +362,26 @@
         [publisherPosition setObject:[NSNumber numberWithInt:_publisher.view.frame.size.height] forKey:@"height"];
         [publisherPosition setObject:[NSNumber numberWithInt:1] forKey:@"expanded"];
         
-        _publisher.view.layer.cornerRadius = 0;
+        CGRect frame = CGRectMake(spaceLeft, spaceTop, spaceWidth, spaceHeight);
 
-        frame = CGRectMake(spaceLeft, spaceTop, spaceWidth, spaceHeight);
-        
-        //[_publisher.view  setUserInteractionEnabled:NO];
+        [UIView animateWithDuration:0.5
+                         animations:^{
+                            [_publisher.view setFrame:frame];
+                         }
+                         completion:^(BOOL finished) {
+                            _publisher.view.layer.cornerRadius = 0;
+                         }];
     }
-    [_publisher.view setFrame:frame];
 
     NSMutableDictionary* payload = [[NSMutableDictionary alloc] init];
     [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.x] forKey:@"left"];
     [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.y] forKey:@"top"];
     [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.width] forKey:@"width"];
     [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.height] forKey:@"height"];
+    [payload setObject:[publisherPosition objectForKey:@"expanded"] forKey:@"fullscreen"];
     
     // Return to Javascript
-    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary: payload];
-    [pluginResult setKeepCallbackAsBool:YES];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:[callbackList objectForKey:@"publishViewChangeCallbackId"]];
+    [self triggerCallback:@"publishViewChangeCallbackId" withPayload:payload];
 }
 
 - (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer {
@@ -337,9 +437,30 @@
         [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.origin.y] forKey:@"top"];
         [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.width] forKey:@"width"];
         [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.height] forKey:@"height"];
-        CDVPluginResult* callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary: payload];
+        [payload setObject:[NSNumber numberWithInt:_publisher.view.frame.size.height] forKey:@"fullscreen"];
+        [self triggerCallback:@"publishViewChangeCallbackId" withPayload:payload];
+    }
+}
+
+- (void)handleSingleTapOverlay:(UITapGestureRecognizer *)recognizer {
+    if (recognizer.view == publisherOverlayButtonLeft) {
+        [self triggerCallback:@"overlayLeft" withPayload:nil];
+    }
+    if (recognizer.view == publisherOverlayButtonRight) {
+        [self triggerCallback:@"overlayRight" withPayload:nil];
+    }
+}
+
+- (void) triggerCallback:(NSString*)callback withPayload:(NSDictionary *)payload {
+    if ([callbackList objectForKey:callback] != nil) {
+        CDVPluginResult* callbackResult;
+        if (payload != nil) {
+            callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary: payload];
+        } else {
+            callbackResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        }
         [callbackResult setKeepCallbackAsBool:YES];
-        [self.commandDelegate sendPluginResult:callbackResult callbackId:[callbackList objectForKey:@"publishViewChangeCallbackId"]];
+        [self.commandDelegate sendPluginResult:callbackResult callbackId:[callbackList objectForKey:callback]];
     }
 }
 
@@ -378,7 +499,13 @@
     
     // Remove publisher view
     if (_publisher) {
-        [_publisher.view removeFromSuperview];
+        [UIView animateWithDuration:0.5
+                 animations:^{
+                    _publisher.view.alpha = 0;
+                 }
+                 completion:^(BOOL finished){
+                    [_publisher.view removeFromSuperview];
+                 }];
     }
     
     // Return to Javascript
@@ -386,6 +513,14 @@
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
+- (void)setInteractivity:(CDVInvokedUrlCommand*)command {
+    bool interactive = [[command.arguments objectAtIndex:0] boolValue];
+    if (_publisher.view) {
+        _publisher.view.userInteractionEnabled = interactive;
+        publisherOverlayButtonLeft.userInteractionEnabled = interactive;
+        publisherOverlayButtonRight.userInteractionEnabled = interactive;
+    }
+}
 
 #pragma mark Session Methods
 - (void)connect:(CDVInvokedUrlCommand *)command{
@@ -426,13 +561,11 @@
     
     int top = [[command.arguments objectAtIndex:1] intValue];
     int left = [[command.arguments objectAtIndex:2] intValue];
-    //int width = [[command.arguments objectAtIndex:3] intValue];
-    //int height = [[command.arguments objectAtIndex:4] intValue];
+    int width = [[command.arguments objectAtIndex:3] intValue];
+    int height = [[command.arguments objectAtIndex:4] intValue];
     //int zIndex = [[command.arguments objectAtIndex:5] intValue];
+    int visible = [[command.arguments objectAtIndex:10] intValue];
 
-    int width = 86;
-    int height = 86;
-    
     // Acquire Stream, then create a subscriber object and put it into dictionary
     OTStream* myStream = [streamDictionary objectForKey:sid];
     OTSubscriber* sub = [[OTSubscriber alloc] initWithStream:myStream delegate:self];
@@ -447,13 +580,21 @@
     [subscriberDictionary setObject:sub forKey:myStream.streamId];
     
     [sub.view setFrame:CGRectMake(left, top, width, height)];
-    
+
     [self.webView.superview addSubview:sub.view];
 
     sub.view.layer.zPosition = 3;
     sub.view.layer.cornerRadius = round(width / 2);
-    sub.view.layer.masksToBounds = YES;
+    sub.view.clipsToBounds = YES;
     
+    sub.view.alpha = 0;
+    sub.view.userInteractionEnabled = NO;
+    if (visible) {
+        [UIView animateWithDuration:0.5
+                     animations:^{
+                        sub.view.alpha = 1;
+                     }];
+    }
 
     // Return to JS event handler
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -467,8 +608,14 @@
     NSString* sid = [command.arguments objectAtIndex:0];
     OTSubscriber * subscriber = [subscriberDictionary objectForKey:sid];
     [_session unsubscribe:subscriber error:nil];
-    [subscriber.view removeFromSuperview];
-    [subscriberDictionary removeObjectForKey:sid];
+    [UIView animateWithDuration:0.5
+             animations:^{
+                subscriber.view.frame = CGRectMake(subscriber.view.frame.origin.x - spaceWidth,subscriber.view.frame.origin.y, subscriber.view.frame.size.width, subscriber.view.frame.size.height);
+             }
+             completion:^(BOOL finished){
+                [subscriber.view removeFromSuperview];
+                [subscriberDictionary removeObjectForKey:sid];
+             }];
 }
 
 // Called by session.unsubscribe(streamId, top, left)
@@ -577,8 +724,15 @@
     if (subscriber) {
         NSLog(@"subscriber found, unsubscribing");
         [_session unsubscribe:subscriber error:nil];
-        [subscriber.view removeFromSuperview];
-        [subscriberDictionary removeObjectForKey:stream.streamId];
+        [UIView animateWithDuration:0.5
+                 animations:^{
+                    subscriber.view.frame = CGRectMake(subscriber.view.frame.origin.x - spaceWidth,subscriber.view.frame.origin.y, subscriber.view.frame.size.width, subscriber.view.frame.size.height);
+                 }
+                 completion:^(BOOL finished){
+                    [subscriber.view removeFromSuperview];
+                    [subscriberDictionary removeObjectForKey:stream.streamId];
+                 }];
+        
     }
     [self triggerStreamDestroyed: stream withEventType: @"sessionEvents"];
 }
@@ -603,11 +757,24 @@
     // Setting up event object
     for ( id key in subscriberDictionary ) {
         OTSubscriber* aStream = [subscriberDictionary objectForKey:key];
-        [aStream.view removeFromSuperview];
+            [UIView animateWithDuration:0.5
+                 animations:^{
+                    aStream.view.frame = CGRectMake(aStream.view.frame.origin.x - spaceWidth,aStream.view.frame.origin.y, aStream.view.frame.size.width, aStream.view.frame.size.height);
+                 }
+                 completion:^(BOOL finished){
+                    [aStream.view removeFromSuperview];
+                    [subscriberDictionary removeObjectForKey:key];
+                 }];
     }
     [subscriberDictionary removeAllObjects];
     if( _publisher ){
-        [_publisher.view removeFromSuperview];
+        [UIView animateWithDuration:0.5
+             animations:^{
+                _publisher.view.alpha = 0;
+             }
+             completion:^(BOOL finished){
+                [_publisher.view removeFromSuperview];
+             }];
     }
     
     // Setting up event object
@@ -635,7 +802,13 @@
 }
 - (void)publisher:(OTPublisherKit*)publisher streamDestroyed:(OTStream *)stream{
     if (_publisher) {
-        [_publisher.view removeFromSuperview];
+        [UIView animateWithDuration:0.5
+                 animations:^{
+                    _publisher.view.alpha = 0;
+                 }
+                 completion:^(BOOL finished){
+                    [_publisher.view removeFromSuperview];
+                 }];
     }
     
     [self triggerStreamDestroyed: stream withEventType: @"publisherEvents"];

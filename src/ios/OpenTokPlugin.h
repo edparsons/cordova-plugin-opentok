@@ -30,6 +30,7 @@
 - (void)visible:(CDVInvokedUrlCommand*)command;
 - (void)setCameraPosition:(CDVInvokedUrlCommand*)command;
 - (void)destroyPublisher:(CDVInvokedUrlCommand*)command;
+- (void)setInteractivity:(CDVInvokedUrlCommand*)command;
 
 // Session
 - (void)connect:(CDVInvokedUrlCommand*)command;
